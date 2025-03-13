@@ -6,6 +6,7 @@ import { Chart as ChartJS, registerables } from "chart.js"
 import { WordCloudController, WordElement } from "chartjs-chart-wordcloud"
 import { useRouter } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import Link from "next/link"
 
 // Register Chart.js components and the word cloud plugin.
 ChartJS.register(...registerables, WordCloudController, WordElement)
@@ -222,9 +223,15 @@ const SummaryDashboard = () => {
               "Run Deep Analysis & Go to Answer Page"
             )}
           </button>
+          </div>
+          <div className="mt-12 text-center">
+          <Link href="/" className="block mt-6  text-center text-purple-300 text-lg hover:text-purple-500 transition duration-300">
+  Try For Another YouTube Video
+</Link>
+</div>
+
         </div>
       </div>
-    </div>
   )
 }
 

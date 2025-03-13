@@ -1,35 +1,52 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongo";
 import { Comment } from "@/lib/models/comment";
 
-// Ensure this uses the App Router (for Next.js 13+)
-export async function POST(req: Request) {
-    try {
-        await connectDB();
-        const { comments } = await req.json();
+// Function to remove HTML tags safely
+// Function to remove HTML tags safely
+function stripHtml(html?: string) {
+    if (!html) return ""; // Return empty string if undefined or null
+    return html.replace(/<[^>]+>/g, "").trim();
+  }
 
-        if (!comments || !Array.isArray(comments)) {
-            return NextResponse.json({ message: "Invalid data format" }, { status: 400 });
-        }
+export async function POST(req: NextRequest) {
+  try {
+    await connectDB(); // Ensure MongoDB connection
 
-        // Delete all old comments
-        await Comment.deleteMany({});
+    const { comments } = await req.json();
+    console.log("Received Data:", comments);
 
-        // Insert new comments
-        const sanitizedComments = comments.map(({ text, votes, hearted, replies, time }) => ({
-            text,
-            votes: Number(votes),  
-            hearted: Boolean(hearted),
-            replies: Number(replies),
-            time,
-        }));
-
-        const res=await Comment.insertMany(sanitizedComments);
-        console.log("Inserted comments: ",res);
-
-        return NextResponse.json({ message: "Comments stored successfully!" }, { status: 200 });
-    } catch (error) {
-        console.error("Error storing comments:", error);
-        return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    if (!Array.isArray(comments) || comments.length === 0) {
+      return NextResponse.json({ error: "Invalid or empty comments array" }, { status: 400 });
     }
+
+    // Delete old comments before inserting new ones
+    await Comment.deleteMany({});
+
+    // Format and validate comments
+    const formattedComments = comments.map(comment => {
+      if (!comment.text || !comment.time) {
+        throw new Error("Each comment must have a 'text' and 'time' field.");
+      }
+
+      return {
+        text: stripHtml(comment.text), // Clean the text
+        votes: Number(comment.votes) || 0, // Default: 0
+        hearted: Boolean(comment.hearted), // Default: false
+        replies: Number(comment.replies) || 0, // Default: 0
+        time: new Date(comment.time), // Ensure valid Date object
+      };
+    });
+
+    console.log(formattedComments);
+
+    // Insert new comments
+    await Comment.insertMany(formattedComments);
+
+    return NextResponse.json({ message: "Comments stored successfully!" }, { status: 201 });
+
+  } catch (error) {
+    console.error("❌ Error storing comments:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }

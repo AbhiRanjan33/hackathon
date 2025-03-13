@@ -17,13 +17,14 @@ export async function connectDB() {
     if (!cached.promise) {
         console.log("Connecting to MongoDB...");
         cached.promise = mongoose.connect(MONGO_URI)
-            .then((mongoose) => {
-            console.log("MongoDB connected successfully");
-            return mongoose;
-        }).catch((err) => {
-            console.error("MongoDB connection error:", err);
-            throw err;
-        });
+            .then((mongooseInstance) => {
+                console.log("MongoDB connected successfully");
+                return mongooseInstance;
+            })
+            .catch((err) => {
+                console.error("MongoDB connection error:", err);
+                throw new Error("MongoDB connection failed");
+            });
     }
 
     cached.conn = await cached.promise;

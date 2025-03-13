@@ -21,6 +21,7 @@
     "fastai": "^1.0.0",
     "fastapi": "^0.0.8",
     "framer-motion": "^12.4.3",
+    "he": "^1.2.0",
     "lucide-react": "^0.475.0",
     "mongodb": "^6.13.0",
     "mongoose": "^8.10.1",

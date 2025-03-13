@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { HfInference } from "@huggingface/inference"
 import AnalysisLoader from "./AnalysisLoader"
+import { useSession } from "@clerk/nextjs"
 
 interface VideoDetails {
   title: string
@@ -18,6 +19,7 @@ interface VideoDetails {
 const client = new HfInference("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")
 
 const SentimentForm = () => {
+  const {data:session}=useSession();
   const [youtubeLink, setYoutubeLink] = useState("")
   const [loading, setLoading] = useState(false)
   const [deepLoading, setDeepLoading] = useState(false)
@@ -27,6 +29,7 @@ const SentimentForm = () => {
   const [sentiments, setSentiments] = useState<any[]>([])
 
   const handleAnalyze = async () => {
+    
     setLoading(true)
     setVideoDetails(null)
     setConfirmed(false)
@@ -53,30 +56,20 @@ const SentimentForm = () => {
     setDeepLoading(true)
 
     try {
-      console.log("Sending request to API...")
+      console.log("Fetching comments from YouTube API...")
 
-      // Fetch comments from scraper
-      const response = await fetch("https://youtube-scraper-api-service.onrender.com/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: youtubeLink }),
-      })
+      const videoId = extractYouTubeVideoId(youtubeLink)
+      const comments = await fetchYouTubeComments(videoId)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Server Response:", errorText)
-        throw new Error(`Failed to fetch comments: ${response.status}`)
-      }
+      console.log("Fetched YouTube comments:", comments); 
 
-      const data = await response.json()
-      console.log("Fetched comments:", data)
 
       // Send comments to MongoDB
       console.log("Storing comments in MongoDB...")
       const storeResponse = await fetch("/api/storeComments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comments: data.comments }),
+        body: JSON.stringify({ comments }),
       })
 
       // ✅ Fetch video transcript using our API
@@ -126,7 +119,7 @@ const SentimentForm = () => {
       await fetch("/api/addSentiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comments: data.comments, sentimentResults: sentimentResults.results }),
+        body: JSON.stringify({ comments, sentimentResults: sentimentResults.results }),
       })
 
       console.log("Sentiments added to database successfully.")
@@ -185,7 +178,7 @@ const SentimentForm = () => {
       {deepLoading && <AnalysisLoader />}
 
       <div className="w-full max-w-md space-y-8">
-        <h2 className="text-3xl font-extrabold text-center text-purple-400 glow">YouTube Sentiment Analysis</h2>
+        <h2 className="text-7xl font-extrabold text-center text-purple-400 glow">Sentinal</h2>
 
         <div className="backdrop-blur-lg bg-purple-900/10 p-8 rounded-2xl shadow-lg border border-purple-500/20">
           <input
@@ -294,6 +287,29 @@ const fetchYouTubeData = async (videoId: string): Promise<VideoDetails | null> =
   }
   return null
 }
+
+const fetchYouTubeComments = async (videoId: string) => {
+  try {
+    const API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&key=${API_KEY}`
+    );
+    const data = await response.json();
+
+    return data.items.map((item: any) => ({
+      text: item.snippet.topLevelComment.snippet.textDisplay,  // ✅ Fetch comment text
+      time: new Date(item.snippet.topLevelComment.snippet.publishedAt), // ✅ Convert time to Date
+      votes: item.snippet.topLevelComment.snippet.likeCount || 0, // ✅ Fetch like count as votes
+      hearted: item.snippet.topLevelComment.snippet.viewerRating === "like", // ✅ Convert rating to boolean
+      replies: item.snippet.totalReplyCount || 0, // ✅ Fetch reply count
+    }));
+  } catch (error) {
+    console.error("Error fetching YouTube comments:", error);
+    return [];
+  }
+};
+
+
 
 export default SentimentForm
 

@@ -1,33 +1,43 @@
 import { NextResponse } from "next/server";
 import { YoutubeTranscript } from "youtube-transcript";
 
+// ✅ Main API handler
 export async function POST(req: Request) {
   try {
-    const { youtubeLink } = await req.json();
+    // Parse request body
+    const body = await req.json();
+    console.log("📥 Received transcript request:", body); // Debugging log
 
+    // Validate `youtubeLink`
+    const youtubeLink = body.youtubeLink;
     if (!youtubeLink) {
+      console.error("❌ Missing YouTube link in request body");
       return NextResponse.json({ error: "Missing YouTube link" }, { status: 400 });
     }
 
-    // Extract videoId from the provided YouTube link
+    // Extract Video ID from YouTube URL
     const videoId = extractVideoId(youtubeLink);
-
     if (!videoId) {
+      console.error("❌ Invalid YouTube URL:", youtubeLink);
       return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
     }
 
-    console.log("Fetching transcript for video ID:", videoId);
+    console.log("🔍 Fetching transcript for Video ID:", videoId);
 
-    // Fetch transcript server-side (to bypass CORS issues)
-    const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+    // Fetch transcript
+    const transcript = await fetchTranscriptServerSide(videoId);
+    if (!transcript) {
+      console.error("❌ Failed to fetch transcript");
+      return NextResponse.json({ error: "Failed to fetch transcript" }, { status: 500 });
+    }
 
-    // Convert transcript into a full text string
+    // Convert transcript to a full text block
     const fullText = transcript.map(entry => entry.text).join(" ");
-    console.log("Full Transcript Text:", fullText);
+    console.log("📜 Full Transcript Text:", fullText);
 
-    // Enable CORS headers
+    // ✅ Success response
     return NextResponse.json(
-      { transcript, fullText },
+      { videoId, transcript, fullText },
       {
         status: 200,
         headers: {
@@ -38,13 +48,24 @@ export async function POST(req: Request) {
       }
     );
   } catch (error) {
-    console.error("Transcript Fetch Error:", error);
-    return NextResponse.json({ error: "Failed to fetch transcript" }, { status: 500 });
+    console.error("🚨 Transcript Fetch Error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
 
-// ✅ Extracts video ID from different YouTube URL formats
+// ✅ Extract Video ID from YouTube URL
 function extractVideoId(url: string): string | null {
   const match = url.match(/(?:youtube\.com\/(?:[^/]+\/.*|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
   return match ? match[1] : null;
+}
+
+// ✅ Fetch transcript while handling errors
+async function fetchTranscriptServerSide(videoId: string) {
+  try {
+    const transcript = await YoutubeTranscript.fetchTranscript(videoId);
+    return transcript;
+  } catch (error) {
+    console.error("🚨 Error fetching transcript:", error);
+    return null;
+  }
 }

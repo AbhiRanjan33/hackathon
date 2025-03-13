@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
+import Link from "next/link"
 
 const AIAnalysisPage = () => {
   const [analysis, setAnalysis] = useState<string | null>(null)
@@ -57,10 +58,23 @@ const AIAnalysisPage = () => {
         {!loading && !error && !analysis && (
           <p className="text-lg text-purple-300 text-center">No analysis data available.</p>
         )}
+
+        {/* Link to Summary Dashboard */}
+        <div className="mt-10 text-center">
+          <Link href="/SummaryDashboard" className="block text-purple-300 text-lg hover:text-purple-500 transition duration-300">
+            Back to Summary Dashboard
+          </Link>
+        </div>
+
+        {/* Link to Home Page */}
+        <div className="mt-6 text-center">
+          <Link href="/" className="block text-purple-300 text-lg hover:text-purple-500 transition duration-300">
+            Try For Another YouTube Video
+          </Link>
+        </div>
       </div>
     </div>
   )
 }
 
-export default AIAnalysisPage;
-
+export default AIAnalysisPage
