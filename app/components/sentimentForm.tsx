@@ -77,17 +77,19 @@ const SentimentForm = () => {
       const transcriptResponse = await fetch("/api/getTranscript", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ youtubeLink }),
+        body: JSON.stringify({ videoId }),
       })
 
+      let transcriptText = "No transcript available";
       if (!transcriptResponse.ok) {
         const errorText = await transcriptResponse.text()
         console.error("❌ Transcript API Response:", errorText)
-        throw new Error(`Failed to fetch transcript: ${transcriptResponse.status}`)
+        console.warn("Proceeding with no transcript available");
+      } else {
+        const transcriptData = await transcriptResponse.json()
+        transcriptText = transcriptData.fullText || "No transcript available";
+        console.log("✅ Transcript Fetched (first 100 chars):", transcriptText.substring(0, 100) + "...")
       }
-
-      const transcriptData = await transcriptResponse.json()
-      console.log("✅ Transcript Fetched:", transcriptData)
 
       console.log("Fetching stored comments...")
       const fetchResponse = await fetch("/api/getComments")
@@ -137,8 +139,8 @@ const SentimentForm = () => {
         body: JSON.stringify({
           likes: videoDetails?.likes,
           views: videoDetails?.views,
-          commentsDB: updatedComments.comments,
-          transcript: transcriptData,
+          transcript: transcriptText,
+          videoId,
         }),
       })
       if (!summaryResponse.ok) {
@@ -157,7 +159,7 @@ const SentimentForm = () => {
           likes: videoDetails?.likes,
           views: videoDetails?.views,
           commentsDB: storedComments.comments,
-          transcript: transcriptData,
+          transcript: transcriptText,
         }),
       })
 
@@ -291,18 +293,52 @@ const fetchYouTubeData = async (videoId: string): Promise<VideoDetails | null> =
 const fetchYouTubeComments = async (videoId: string) => {
   try {
     const API_KEY = process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
-    const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&key=${API_KEY}`
-    );
-    const data = await response.json();
+    let allComments = [];
+    let nextPageToken = null;
+    let commentCount = 0;
+    
+    console.log("🔄 Starting to fetch ALL available comments...");
+    
+    do {
+      // Build URL with pageToken if available
+      let url = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&key=${API_KEY}`;
+      if (nextPageToken) {
+        url += `&pageToken=${nextPageToken}`;
+      }
 
-    return data.items.map((item: any) => ({
-      text: item.snippet.topLevelComment.snippet.textDisplay,  // ✅ Fetch comment text
-      time: new Date(item.snippet.topLevelComment.snippet.publishedAt), // ✅ Convert time to Date
-      votes: item.snippet.topLevelComment.snippet.likeCount || 0, // ✅ Fetch like count as votes
-      hearted: item.snippet.topLevelComment.snippet.viewerRating === "like", // ✅ Convert rating to boolean
-      replies: item.snippet.totalReplyCount || 0, // ✅ Fetch reply count
-    }));
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch comments: ${response.status}`);
+      }
+      
+      const data = await response.json();
+
+      if (!data.items || data.items.length === 0) {
+        console.log("⚠️ No more comments available");
+        break;
+      }
+
+      // Map and add current page of comments
+      const pageComments = data.items.map((item: any) => ({
+        text: item.snippet.topLevelComment.snippet.textDisplay,
+        time: new Date(item.snippet.topLevelComment.snippet.publishedAt),
+        votes: item.snippet.topLevelComment.snippet.likeCount || 0,
+        hearted: item.snippet.topLevelComment.snippet.viewerRating === "like",
+        replies: item.snippet.totalReplyCount || 0,
+        videoId: videoId, // Add videoId to each comment
+      }));
+
+      allComments = [...allComments, ...pageComments];
+      commentCount += pageComments.length;
+      console.log(`📊 Fetched page of ${pageComments.length} comments, total: ${commentCount}`);
+      
+      // Update nextPageToken for next iteration
+      nextPageToken = data.nextPageToken || null;
+      
+    } while (nextPageToken); // Continue until no more pages
+
+    console.log(`✅ Completed fetching ALL ${allComments.length} comments for video ${videoId}`);
+    return allComments;
   } catch (error) {
     console.error("Error fetching YouTube comments:", error);
     return [];

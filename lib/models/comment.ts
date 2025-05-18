@@ -1,19 +1,33 @@
-import mongoose from "mongoose";
+// lib/models/comment.ts
+import mongoose, { Schema } from "mongoose";
 
-const CommentSchema = new mongoose.Schema({
-    text: { type: String, required: true },
-    votes: { type: Number, required: true, default: 0 },
-    hearted: { type: Boolean, required: true, default: false },
-    replies: { type: Number, required: true, default: 0 },
-    time: { type: Date, required: true },  // Changed to Date
-    sentiment: { type: String, enum: ["Positive", "Negative", "Neutral"], default: "Neutral" }, // Added sentiment field
+// Define interface for comment data
+export interface CommentData {
+  text: string;
+  votes: number;
+  hearted: boolean;
+  replies: number;
+  time: Date;
+  videoId: string;
+  sentiment: "positive" | "neutral" | "negative";
+  sentimentScore?: number;
+  timestamp?: Date;
+}
+
+const commentSchema = new Schema({
+  text: { type: String, required: true },
+  votes: { type: Number, default: 0 },
+  hearted: { type: Boolean, default: false },
+  replies: { type: Number, default: 0 },
+  time: { type: Date, required: true },
+  videoId: { type: String, required: true },
+  sentiment: {
+    type: String,
+    enum: ["positive", "neutral", "negative"], // Must include "neutral" in lowercase
+    default: "neutral",
+  },
+  sentimentScore: { type: Number },
+  timestamp: { type: Date, default: Date.now },
 });
 
-CommentSchema.pre('save', function(next) {
-    this.votes = Number(this.votes) || 0;
-    this.replies = Number(this.replies) || 0;
-    this.time = this.time ? new Date(this.time).toISOString() : new Date().toISOString();  // Ensure time is valid
-    next();
-});
-
-export const Comment = mongoose.models.Comment || mongoose.model("Comment", CommentSchema);
+export const Comment = mongoose.models.Comment || mongoose.model<CommentData>("Comment", commentSchema);

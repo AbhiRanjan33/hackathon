@@ -1,52 +1,69 @@
-import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongo";
-import { Comment } from "@/lib/models/comment";
+// app/api/storeComments/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { connectDB } from '@/lib/mongo';
+import { Comment } from '@/lib/models/comment';
 
-// Function to remove HTML tags safely
-// Function to remove HTML tags safely
 function stripHtml(html?: string) {
-    if (!html) return ""; // Return empty string if undefined or null
-    return html.replace(/<[^>]+>/g, "").trim();
-  }
+  if (!html) return '';
+  return html.replace(/<[^>]+>/g, '').trim();
+}
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB(); // Ensure MongoDB connection
+    await connectDB();
+    const { comments, videoId } = await req.json();
+    console.log('📥 Received Data:', { comments, videoId });
 
-    const { comments } = await req.json();
-    console.log("Received Data:", comments);
-
-    if (!Array.isArray(comments) || comments.length === 0) {
-      return NextResponse.json({ error: "Invalid or empty comments array" }, { status: 400 });
+    if (!videoId) {
+      console.error('❌ Missing videoId');
+      return NextResponse.json({ error: 'Missing videoId' }, { status: 400 });
     }
 
-    // Delete old comments before inserting new ones
-    await Comment.deleteMany({});
+    if (!Array.isArray(comments)) {
+      console.error('❌ Invalid comments format: Expected an array');
+      return NextResponse.json({ error: 'Invalid comments array' }, { status: 400 });
+    }
 
-    // Format and validate comments
-    const formattedComments = comments.map(comment => {
+    if (comments.length === 0) {
+      console.warn('⚠️ No comments to store');
+      return NextResponse.json({ message: 'No comments provided' }, { status: 200 });
+    }
+
+    await Comment.deleteMany({ videoId });
+    console.log('🗑️ Cleared existing comments for videoId:', videoId);
+
+    const formattedComments = comments.map((comment, index) => {
       if (!comment.text || !comment.time) {
-        throw new Error("Each comment must have a 'text' and 'time' field.");
+        console.error(`❌ Invalid comment at index ${index}:`, comment);
+        throw new Error(`Comment at index ${index} must have a 'text' and 'time' field.`);
       }
 
       return {
-        text: stripHtml(comment.text), // Clean the text
-        votes: Number(comment.votes) || 0, // Default: 0
-        hearted: Boolean(comment.hearted), // Default: false
-        replies: Number(comment.replies) || 0, // Default: 0
-        time: new Date(comment.time), // Ensure valid Date object
+        text: stripHtml(comment.text),
+        votes: Number(comment.votes) || 0,
+        hearted: Boolean(comment.hearted),
+        replies: Number(comment.replies) || 0,
+        time: new Date(comment.time),
+        videoId: videoId,
+        sentiment: comment.sentiment || 'neutral',
+        timestamp: comment.timestamp ? new Date(comment.timestamp) : new Date(comment.time),
       };
     });
 
-    console.log(formattedComments);
+    console.log('📝 Formatted comments:', formattedComments);
 
-    // Insert new comments
-    await Comment.insertMany(formattedComments);
+    const insertedComments = await Comment.insertMany(formattedComments);
+    console.log('✅ Stored comments:', insertedComments.length);
 
-    return NextResponse.json({ message: "Comments stored successfully!" }, { status: 201 });
-
+    return NextResponse.json(
+      { message: 'Comments stored successfully!', count: insertedComments.length },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error("❌ Error storing comments:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    console.error('🚨 Error storing comments:', error);
+    return NextResponse.json(
+      { error: (error as Error).message || 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
