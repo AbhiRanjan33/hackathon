@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Send, ArrowLeft, MessageSquare } from "lucide-react";
 
@@ -10,101 +10,94 @@ interface ChatMessage {
   content: string;
 }
 
-interface VideoComment {
-  text: string;
-  votes: number;
-  time: string;
-}
-
 export default function VideoChatPage() {
-  const searchParams = useSearchParams();
-  const videoId = searchParams.get("videoId");
+  const { videoId } = useParams<{ videoId: string }>();
   const [input, setInput] = useState("");
-  const [transcript, setTranscript] = useState<string | null>(null);
-  const [videoDetails, setVideoDetails] = useState<any | null>(null);
+  const [transcript, setTranscript] = useState("");
+  const [videoDetails, setVideoDetails] = useState<{
+    title?: string;
+    thumbnail?: string;
+    channel?: string;
+    views?: string;
+    likes?: string;
+    subscribers?: string;
+  } | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [comments, setComments] = useState<VideoComment[]>([]);
-  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchVideoContext = async () => {
+    const fetchData = async () => {
       try {
-        // Fetch video details
-        const detailsResponse = await fetch(`/api/videoDetails?videoId=${videoId}`);
-        if (detailsResponse.ok) {
-          const details = await detailsResponse.json();
-          setVideoDetails(details);
-          console.log("Video details loaded:", details.title);
-        }
-
-        // Fetch transcript
-        const transcriptResponse = await fetch("/api/getTranscript", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ videoId }),
-        });
-
-        if (transcriptResponse.ok) {
-          const data = await transcriptResponse.json();
-          setTranscript(data.fullText);
-          console.log("Transcript loaded");
+        console.log("🚀 Loading context for video:", videoId);
+        
+        // 1. First load transcript (most important)
+        try {
+          const transcriptRes = await fetch("/api/getTranscript", {
+            method: "POST", 
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videoId })
+          });
+          
+          if (transcriptRes.ok) {
+            const data = await transcriptRes.json();
+            if (data.fullText) {
+              setTranscript(data.fullText);
+              console.log("✅ Transcript loaded, length:", data.fullText.length);
+            }
+          } else {
+            console.error("❌ Failed to load transcript");
+          }
+        } catch (err) {
+          console.error("❌ Transcript fetch error:", err);
         }
         
-        // Fetch comments for additional context
+        // 2. Load video details
         try {
-          const commentsResponse = await fetch(`/api/fetch-comments?videoId=${videoId}`);
-          if (commentsResponse.ok) {
-            const commentsData = await commentsResponse.json();
-            if (commentsData.comments) {
-              setComments(commentsData.comments);
-              console.log(`Loaded ${commentsData.comments.length} comments`);
+          const detailsRes = await fetch(`/api/videoDetails?videoId=${videoId}`);
+          if (detailsRes.ok) {
+            const details = await detailsRes.json();
+            setVideoDetails(details);
+            console.log("✅ Video details loaded:", details.title);
+          }
+        } catch (err) {
+          console.error("❌ Video details fetch error:", err);
+        }
+        
+        // 3. Load analysis
+        try {
+          const analysisRes = await fetch(`/api/analyze?videoId=${videoId}`);
+          if (analysisRes.ok) {
+            const data = await analysisRes.json();
+            if (data.analysis) {
+              setAnalysis(data.analysis);
+              console.log("✅ Analysis loaded, length:", data.analysis.length);
             }
           }
-        } catch (commentsError) {
-          console.error("Error fetching comments:", commentsError);
+        } catch (err) {
+          console.error("❌ Analysis fetch error:", err);
         }
         
-        // Fetch video analysis if available
-        try {
-          const analysisResponse = await fetch(`/api/analyze?videoId=${videoId}`);
-          if (analysisResponse.ok) {
-            const analysisData = await analysisResponse.json();
-            if (analysisData.analysis) {
-              setAnalysis(analysisData.analysis);
-              console.log("Analysis loaded");
-            }
-          }
-        } catch (analysisError) {
-          console.error("Error fetching analysis:", analysisError);
-        }
-        
+        console.log("🔄 All data loaded");
       } catch (error) {
-        console.error("Error fetching context:", error);
+        console.error("❌ Error in fetchData:", error);
       } finally {
         setInitialLoading(false);
-        // Add a welcome message
         setChatHistory([
-          {
-            role: "assistant",
-            content: "Hi! I'm your AI assistant trained on this video's content. Ask me anything about the video, the creator's sentiment, or audience reception. I can also answer general questions unrelated to the video!",
-          },
+          { 
+            role: "assistant", 
+            content: "Hi! I'm here to discuss this video with you. Ask me anything about the content, audience reaction, or how the creator can improve!" 
+          }
         ]);
       }
     };
-
+    
     if (videoId) {
-      fetchVideoContext();
+      fetchData();
     } else {
       setInitialLoading(false);
-      setChatHistory([
-        {
-          role: "assistant",
-          content: "Welcome! I don't have a specific video context loaded. What would you like to talk about?",
-        },
-      ]);
     }
   }, [videoId]);
 
@@ -126,16 +119,24 @@ export default function VideoChatPage() {
     setLoading(true);
 
     try {
+      console.log("📤 Sending to chatbot API with:", {
+        videoId,
+        question: userMessage.content,
+        transcript_available: !!transcript,
+        analysis_available: !!analysis,
+        video_details_available: !!videoDetails
+      });
+
       const response = await fetch("/api/chatbot", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           videoId,
-          transcript,
-          videoDetails,
           question: userMessage.content,
-          chatHistory: chatHistory,
-          analysis: analysis
+          transcript: transcript || "No transcript available",
+          videoDetails,
+          chatHistory,
+          analysis: analysis || "No analysis available"
         }),
       });
 
@@ -152,7 +153,7 @@ export default function VideoChatPage() {
 
       setChatHistory((prev) => [...prev, aiMessage]);
     } catch (error) {
-      console.error("Error:", error);
+      console.error("❌ Error:", error);
       setChatHistory((prev) => [
         ...prev,
         {
@@ -230,7 +231,7 @@ export default function VideoChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={loading}
-            placeholder="Ask specifically about this video, its content, audience sentiment, or the creator..."
+            placeholder="Ask about this video, its content, audience sentiment, or the creator..."
             className="flex-1 border border-border bg-background p-3 rounded-full focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
           />
           <button
@@ -247,16 +248,14 @@ export default function VideoChatPage() {
         </form>
         
         {/* Context indicator */}
-        {videoDetails && (
-          <div className="max-w-4xl mx-auto mt-2 text-xs text-muted-foreground flex items-center">
-            <MessageSquare className="h-3 w-3 mr-1" />
-            <span>
-              Using context from: {transcript ? "✓ Transcript" : "✗ No transcript"} • 
-              {comments.length > 0 ? ` ✓ ${comments.length} Comments` : " ✗ No comments"} •
-              {analysis ? " ✓ Content Analysis" : " ✗ No analysis"}
-            </span>
-          </div>
-        )}
+        <div className="max-w-4xl mx-auto mt-2 text-xs text-muted-foreground flex items-center">
+          <MessageSquare className="h-3 w-3 mr-1" />
+          <span>
+            Using context from: {transcript ? "✓ Transcript" : "✗ No transcript"} • 
+            {videoDetails ? " ✓ Video Details" : " ✗ No video details"} •
+            {analysis ? " ✓ Content Analysis" : " ✗ No analysis"}
+          </span>
+        </div>
       </div>
     </div>
   );

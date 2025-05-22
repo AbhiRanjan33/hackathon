@@ -183,14 +183,7 @@ const SentimentForm = () => {
         <h2 className="text-7xl font-extrabold text-center text-purple-400 glow">Sentinal</h2>
 
         <div className="backdrop-blur-lg bg-purple-900/10 p-8 rounded-2xl shadow-lg border border-purple-500/20">
-          <input
-            type="text"
-            value={youtubeLink}
-            onChange={(e) => setYoutubeLink(e.target.value)}
-            placeholder="Enter YouTube link"
-            className="w-full p-3 bg-black/50 text-purple-200 placeholder-purple-400 rounded-lg border border-purple-500/30 focus:ring-2 focus:ring-purple-500 outline-none transition-all duration-300"
-            required
-          />
+                    <input            type="text"            value={youtubeLink}            onChange={(e) => setYoutubeLink(e.target.value)}            placeholder="Enter YouTube link"            className="w-full p-3 border border-border bg-background text-foreground rounded-full focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300"            required          />
           <button
             onClick={handleAnalyze}
             className="mt-4 w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 hover:shadow-glow"

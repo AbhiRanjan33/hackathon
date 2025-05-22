@@ -11,7 +11,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 
 // YouTube Data API key
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
 
 // Check if we have YouTube API access
 const hasYouTubeAPI = !!YOUTUBE_API_KEY;

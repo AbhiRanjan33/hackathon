@@ -4,7 +4,7 @@ import { google } from "googleapis";
 // Initialize the YouTube API client
 const youtube = google.youtube({
   version: "v3",
-  auth: process.env.YOUTUBE_API_KEY,
+  auth: process.env.YOUTUBE_API_KEY || process.env.NEXT_PUBLIC_YOUTUBE_API_KEY,
 });
 
 export async function GET(request: NextRequest) {
@@ -18,6 +18,17 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Verify we have a YouTube API key
+    if (!process.env.YOUTUBE_API_KEY && !process.env.NEXT_PUBLIC_YOUTUBE_API_KEY) {
+      console.error("No YouTube API key found");
+      return NextResponse.json(
+        { error: "YouTube API key is not configured" },
+        { status: 500 }
+      );
+    }
+
+    console.log(`📺 Fetching video details for ID: ${videoId}`);
 
     // Fetch video details
     const videoResponse = await youtube.videos.list({

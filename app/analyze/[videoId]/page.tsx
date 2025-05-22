@@ -1,14 +1,7 @@
 // app/analyze/[videoId]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { Pie, Bar } from "react-chartjs-2";
-import { Chart as ChartJS, registerables } from "chart.js";
-import { Loader2, Heart, MessageCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import Cloud from "../../SummaryDashboard/Cloud";
-import * as React from "react";
+import { useEffect, useState } from "react";import { Pie, Bar } from "react-chartjs-2";import { Chart as ChartJS, registerables } from "chart.js";import { Loader2, Heart, MessageCircle } from "lucide-react";import { useRouter } from "next/navigation";import Link from "next/link";import * as React from "react";
 
 ChartJS.register(...registerables);
 
@@ -519,39 +512,7 @@ const AnalysisDashboard = ({ params }: { params: Promise<{ videoId: string }> })
           </div>
         </div>
 
-        {/* Analysis dashboard content - First row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Sentiment Distribution */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-md">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Sentiment Distribution</h2>
-            <div className="aspect-square w-full max-w-xs mx-auto">
-              <Pie 
-                data={sentimentPieData} 
-                options={{
-                  plugins: {
-                    legend: {
-                      position: 'bottom',
-                      labels: {
-                        color: 'var(--foreground)',
-                        font: {
-                          size: 12
-                        }
-                      }
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Word Cloud */}
-          <div className="bg-card border border-border rounded-xl p-6 shadow-md">
-            <h2 className="text-xl font-semibold text-card-foreground mb-4">Top Words & Hashtags</h2>
-            <div className="h-64">
-              {wordAndEmojiTrends?.topWords && <Cloud words={wordAndEmojiTrends.topWords.map((w: any) => ({ text: w.word, value: w.count }))} />}
-            </div>
-          </div>
-        </div>
+                {/* Analysis dashboard content - First row */}        <div className="grid grid-cols-1 gap-8 mb-8">          {/* Sentiment Distribution */}          <div className="bg-card border border-border rounded-xl p-6 shadow-md">            <h2 className="text-xl font-semibold text-card-foreground mb-4">Sentiment Distribution</h2>            <div className="aspect-square w-full max-w-xs mx-auto">              <Pie                 data={sentimentPieData}                 options={{                  plugins: {                    legend: {                      position: 'bottom',                      labels: {                        color: 'var(--foreground)',                        font: {                          size: 12                        }                      }                    }                  }                }}              />            </div>          </div>        </div>
 
         {/* Analysis dashboard content - Second row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">

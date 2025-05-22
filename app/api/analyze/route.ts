@@ -5,7 +5,7 @@ import { google } from "googleapis";
 // Initialize YouTube API client
 const youtube = google.youtube({
   version: "v3",
-  auth: process.env.YOUTUBE_API_KEY,
+  auth: process.env.YOUTUBE_API_KEY || process.env.NEXT_PUBLIC_YOUTUBE_API_KEY,
 });
 
 // Get API key from environment variables

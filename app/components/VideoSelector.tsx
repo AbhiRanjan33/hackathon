@@ -60,13 +60,7 @@ const VideoSelector: React.FC = () => {
         <div className="w-full max-w-md">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <input
-                type="text"
-                placeholder="Enter YouTube Channel ID"
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+                                          <input                type="text"                placeholder="Enter YouTube Channel ID"                value={channelId}                onChange={(e) => setChannelId(e.target.value)}                className="w-full p-3 border border-border bg-background text-foreground rounded-full focus:outline-none focus:ring-2 focus:ring-primary"              />
               {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
             </div>
             <select

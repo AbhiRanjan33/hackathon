@@ -5,8 +5,8 @@ import { Comment } from "@/lib/models/comment";
 // Get API key from environment variables
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "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";
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
-// Use a model that's definitely available on OpenRouter
-const MODEL = "anthropic/claude-3-haiku";
+// Updated model to use the working one from previous project
+const MODEL = "meta-llama/llama-3.1-8b-instruct:free";
 
 function analyzeSentiment(text: string) {
   // Enhanced sentiment analysis with more comprehensive word lists
@@ -60,10 +60,10 @@ export async function POST(req: NextRequest) {
     }
     
     let contextData = "";
-    let sentimentAnalysis = { overall: 'neutral', score: 0, details: {} };
+    let sentimentAnalysis = null;
     let isVideoRelatedQuestion = !!videoId;
     
-    // Extract creator information specifically
+    // Extract creator information
     let creatorName = "Unknown";
     let videoTitle = "Unknown";
     
@@ -79,13 +79,7 @@ export async function POST(req: NextRequest) {
     if (videoId) {
       console.log(`🔍 Analyzing video context for videoId: ${videoId}`);
       
-      // Highlight creator information at the beginning
-      contextData += `\nCURRENT VIDEO INFORMATION:\n`;
-      contextData += `- Title: ${videoTitle}\n`;
-      contextData += `- Creator: ${creatorName}\n`;
-      contextData += `- YouTube ID: ${videoId}\n\n`;
-      
-      // Fetch and process comments
+      // Fetch and process comments for sentiment analysis
       const comments = await Comment.find({ videoId }).lean();
       
       if (comments && comments.length > 0) {
@@ -99,150 +93,52 @@ export async function POST(req: NextRequest) {
         const neutralCounts = sentiments.filter(s => s.sentiment === 'neutral').length;
         
         sentimentAnalysis = {
-          overall: avgScore > 0.1 ? 'positive' : avgScore < -0.1 ? 'negative' : 'neutral',
-          score: avgScore,
-          details: {
-            positive: positiveCounts,
-            negative: negativeCounts,
-            neutral: neutralCounts,
-            total: comments.length
-          }
+          positive: Math.round((positiveCounts / comments.length) * 100),
+          negative: Math.round((negativeCounts / comments.length) * 100),
+          neutral: Math.round((neutralCounts / comments.length) * 100)
         };
-        
-        // Select representative comments (mix of positive and negative)
-        const positiveComments = comments
-          .filter(comment => analyzeSentiment(comment.text).sentiment === 'positive')
-          .sort((a, b) => b.votes - a.votes)
-          .slice(0, 15);
-          
-        const negativeComments = comments
-          .filter(comment => analyzeSentiment(comment.text).sentiment === 'negative')
-          .sort((a, b) => b.votes - a.votes)
-          .slice(0, 15);
-          
-        const neutralComments = comments
-          .filter(comment => analyzeSentiment(comment.text).sentiment === 'neutral')
-          .sort((a, b) => b.votes - a.votes)
-          .slice(0, 10);
-        
-        const representativeComments = [...positiveComments, ...negativeComments, ...neutralComments]
-          .sort((a, b) => b.votes - a.votes)
-          .slice(0, 40);
-        
-        const commentExamples = representativeComments.map(comment => 
-          `- "${comment.text}" (Likes: ${comment.votes}, Sentiment: ${analyzeSentiment(comment.text).sentiment})`
-        ).join("\n");
-        
-        contextData += `\nCOMMENTS ANALYSIS:\n`;
-        contextData += `- Total comments analyzed: ${comments.length}\n`;
-        contextData += `- Overall sentiment: ${sentimentAnalysis.overall}\n`;
-        contextData += `- Sentiment score: ${sentimentAnalysis.score.toFixed(2)}\n`;
-        contextData += `- Positive comments: ${positiveCounts} (${((positiveCounts / comments.length) * 100).toFixed(1)}%)\n`;
-        contextData += `- Negative comments: ${negativeCounts} (${((negativeCounts / comments.length) * 100).toFixed(1)}%)\n`;
-        contextData += `- Neutral comments: ${neutralCounts} (${((neutralCounts / comments.length) * 100).toFixed(1)}%)\n\n`;
-        contextData += `\nREPRESENTATIVE COMMENTS:\n${commentExamples}\n\n`;
-      }
-      
-      // Process transcript data
-      if (transcript) {
-        const transcriptSentiment = analyzeSentiment(transcript);
-        
-        // Extract potential key segments from transcript (first, middle, and last parts)
-        const words = transcript.split(' ');
-        const firstSegment = words.slice(0, 200).join(' ');
-        const middleIndex = Math.floor(words.length / 2);
-        const middleSegment = words.slice(middleIndex - 100, middleIndex + 100).join(' ');
-        const lastSegment = words.slice(-200).join(' ');
-        
-        contextData += `\nTRANSCRIPT ANALYSIS:\n`;
-        contextData += `- Sentiment: ${transcriptSentiment.sentiment}\n`;
-        contextData += `- Score: ${transcriptSentiment.score.toFixed(2)}\n`;
-        contextData += `- Word count: ${words.length}\n\n`;
-        contextData += `\nKEY TRANSCRIPT SEGMENTS:\n`;
-        contextData += `BEGINNING:\n${firstSegment}\n\n`;
-        contextData += `MIDDLE SECTION:\n${middleSegment}\n\n`;
-        contextData += `ENDING:\n${lastSegment}\n\n`;
-      }
-      
-      if (analysis) {
-        contextData += `\nAI ANALYSIS OF VIDEO CONTENT:\n${analysis}\n\n`;
-      }
-      
-      if (videoDetails) {
-        contextData += `\nADDITIONAL VIDEO DETAILS:\n`;
-        contextData += `- Views: ${videoDetails.views || "Unknown"}\n`;
-        contextData += `- Likes: ${videoDetails.likes || "Unknown"}\n`;
-        contextData += `- Subscribers: ${videoDetails.subscribers || "Unknown"}\n\n`;
       }
     }
     
-    // Create context-setting first message
-    let contextMessage = isVideoRelatedQuestion ? {
-      role: "assistant",
-      content: `I'll help you with your questions about the YouTube video "${videoTitle}" by ${creatorName} (ID: ${videoId}).`
-    } : null;
+    // Format sentiment data for the prompt
+    const sentimentText = sentimentAnalysis
+      ? `Sentiment analysis: ${sentimentAnalysis.positive || 0}% positive, ${sentimentAnalysis.neutral || 0}% neutral, ${sentimentAnalysis.negative || 0}% negative.`
+      : "No sentiment data available.";
     
-    // Enhanced system prompt that handles both video-related and general queries
-    const systemPrompt = isVideoRelatedQuestion ? 
-      `You are an AI assistant specialized in analyzing YouTube videos, their content, and creator mental health.
-
-IMPORTANT CONTEXT: The user is asking about the YouTube video titled "${videoTitle}" created by ${creatorName} (Video ID: ${videoId}).
-
-CRITICAL INSTRUCTION: Always refer to the specific video context provided below. DO NOT give generic responses about video content in general. When the user asks about "video content" or "my video", they are SPECIFICALLY referring to "${videoTitle}" by ${creatorName}.
-
-Always remember that:
-1. "The video" or "this video" refers specifically to "${videoTitle}" by ${creatorName}
-2. "The creator" or "content creator" or similar phrases refer to ${creatorName}
-3. When asked to summarize the video, provide a summary of "${videoTitle}" based on the transcript
-4. When asked about the channel, refer to ${creatorName}'s channel
-5. NEVER give generic responses about video content creation when the user is asking about the specific video
-
-You have access to video transcripts, comments with sentiment analysis, and other metadata. Your role is to:
-1. Provide insights about the content creator's emotional state and mental well-being based on their speech patterns and content
-2. Analyze audience reception through comment sentiment analysis
-3. Describe the overall video mood, tone, and key points
-4. Identify potential stress, burnout, or health indicators in the creator's presentation
-5. Highlight positive community interactions and support patterns
-
-When analyzing questions:
-- For questions about THIS specific video, use the provided context information
-- For general questions unrelated to the video, answer from your general knowledge
-- For questions about YouTube, content creation, or mental health in general, provide helpful information without needing context
-
-IMPORTANT: Even vague queries like "video content" or "my video" should be interpreted as referring to "${videoTitle}" by ${creatorName}. Do not give generic responses about video content in general.
-
-Keep responses concise but informative. Use data from comments and transcript when available.` :
-      `You are an AI assistant that helps with general questions. Provide informative, helpful, and friendly responses. If the question isn't about a specific YouTube video, you'll answer based on your general knowledge.`;
-    
-    // Build the messages array with the context
-    let messages = [
-      {
-        role: "system",
-        content: systemPrompt
-      }
-    ];
-    
-    // Add the context-setting first message if it exists and there is no chat history
-    if (contextMessage && chatHistory.length === 0) {
-      messages.push(contextMessage);
-    }
-    
-    // Add the chat history
-    messages = [
-      ...messages,
-      ...chatHistory.map((msg: any) => ({
-        role: msg.role,
-        content: msg.content
-      }))
-    ];
-    
-    // Add the current question with context
-    messages.push({
-      role: "user",
-      content: isVideoRelatedQuestion ? 
-        `${question}\n\nReference context about the video "${videoTitle}" by ${creatorName}:\n${contextData}` :
-        question
+    // Log what we're sending to the model    
+    console.log("📜 Processing for chatbot:", {
+      question,
+      transcript: transcript ? transcript.slice(0, 100) + "..." : "No transcript",
+      sentiment: sentimentText,
+      analysis: analysis ? analysis.slice(0, 100) + "..." : "No analysis"
     });
+    
+    // Use the system prompt from the provided example
+    const systemPrompt = `You are an empathetic and insightful assistant for a YouTube creator, tasked with analyzing their video content and audience feedback to provide personalized advice. You have access to:
+
+- A transcript of the video, reflecting what the creator said.
+- Sentiment analysis of comments (positive, neutral, negative percentages).
+- An AI-generated analysis report (may be limited or unavailable).
+
+For questions about the creator's mental health, performance, or improvements (e.g., "How can I improve my mental health?" or "How am I performing?"):
+1. Analyze the transcript to assess the creator's tone, energy, topics discussed, and delivery style (e.g., confident, stressed, engaging).
+2. Use sentiment data to gauge how the audience perceives the creator (e.g., supportive, critical).
+3. Provide specific, actionable advice to improve mental health (e.g., stress management, audience engagement strategies) and performance (e.g., content delivery, topic focus), tailored to the transcript and sentiment.
+4. If the analysis report has relevant insights, incorporate them, but prioritize your own analysis of transcript and sentiment if the report is lacking.
+
+For general questions (e.g., "How does YouTube work?"):
+- Answer concisely and accurately, without relying on video data unless relevant.
+
+For video-specific questions (e.g., "What's the sentiment?"):
+- Use sentiment data for precise answers (e.g., exact percentages).
+- Reference the analysis report for structured insights (e.g., pros, cons) if available.
+
+Be supportive, positive, and practical, treating the creator as someone seeking growth. If data is missing (e.g., no transcript), acknowledge it and provide general best practices.
+
+Data provided:
+- Transcript: ${transcript || "No transcript available."}
+- Sentiment: ${sentimentText}
+- Analysis report: ${analysis || "No analysis available."}`;
 
     console.log(`🤖 Generating response with ${MODEL}...`);
     
@@ -256,8 +152,17 @@ Keep responses concise but informative. Use data from comments and transcript wh
       },
       body: JSON.stringify({
         model: MODEL,
-        messages,
-        temperature: 0.7,  // Slightly increased for more varied responses
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          { 
+            role: "user", 
+            content: question 
+          }
+        ],
+        temperature: 0.7,
         max_tokens: 1500
       })
     });
@@ -272,12 +177,13 @@ Keep responses concise but informative. Use data from comments and transcript wh
     const aiResponse = result.choices?.[0]?.message?.content || "I couldn't generate a response at this time.";
     
     console.log("✅ Response generated successfully");
+    console.log("📬 Chat response:", aiResponse.slice(0, 100) + "...");
     
     return NextResponse.json({ 
       response: aiResponse,
-      hasVideoContext: !!contextData,
+      hasVideoContext: isVideoRelatedQuestion,
       sentimentAnalysis,
-      model: "Claude 3 Haiku",
+      model: "Meta Llama 3.1 8B Instruct",
       creatorName,
       videoTitle,
       videoId

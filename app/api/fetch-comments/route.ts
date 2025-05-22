@@ -80,7 +80,13 @@ async function analyzeSentiment(text: string) {
 
 // Fetch comments from YouTube API
 async function fetchYouTubeComments(videoId: string) {
-  const API_KEY = process.env.YOUTUBE_API_KEY;
+  const API_KEY = process.env.YOUTUBE_API_KEY || process.env.NEXT_PUBLIC_YOUTUBE_API_KEY;
+  
+  if (!API_KEY) {
+    console.error("YouTube API key is not configured");
+    throw new Error("YouTube API key is missing");
+  }
+  
   let allComments = [];
   let nextPageToken = null;
   let commentCount = 0;

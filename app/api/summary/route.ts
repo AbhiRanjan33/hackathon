@@ -54,8 +54,26 @@ export async function GET(req: NextRequest) {
     const comments = await Comment.find({ videoId }).lean();
     console.log("📚 Fetched comments for GET:", comments.length);
 
+    // Generate the full summary
     const summary = generateSummary(comments, 0, 0, "", videoId);
-    return NextResponse.json({ summary }, { status: 200 });
+    
+    // Extract sentiment data for easier access in the frontend
+    let sentimentData = null;
+    if (summary.sentimentDistribution) {
+      const total = comments.length || 1; // Avoid division by zero
+      sentimentData = {
+        positive: Math.round((summary.sentimentDistribution.positive / total) * 100),
+        neutral: Math.round((summary.sentimentDistribution.neutral / total) * 100),
+        negative: Math.round((summary.sentimentDistribution.negative / total) * 100)
+      };
+    }
+    
+    // Return both the full summary and the comments array
+    return NextResponse.json({
+      summary,
+      sentiment: sentimentData,
+      comments
+    }, { status: 200 });
   } catch (error) {
     console.error("🚨 Summary GET Error:", error);
     return NextResponse.json(
